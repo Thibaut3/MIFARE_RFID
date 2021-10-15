@@ -2,4 +2,4 @@
 
 PROJET CARTE RFID - Module de Communication Sans Fils
 
-Durée du PROJET : 8h
+Durée du PROJET : 16h
