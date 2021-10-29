@@ -24,86 +24,88 @@ ReaderManager::ReaderManager()
 int ReaderManager::PriseContact()
 {
     status = OpenCOM(&MonLecteur);
-    if (status != MI_OK){
-        printf("Reader not found\n");
-        Done();
-
-    }
-    else{
-        switch(MonLecteur.Type)
-        {
-            case ReaderTCP:
-                sprintf(s_buffer, "IP : %s", MonLecteur.IPReader);
-            break;
-            case ReaderCDC:
-                sprintf(s_buffer, "COM%d", MonLecteur.device);
-            break;
+        if (status != MI_OK){
+            printf("Reader not found\n");
+            Done();
 
         }
-        printf("Reader found on %s\n", s_buffer);
+        else{
+            switch(MonLecteur.Type)
+            {
+                case ReaderTCP:
+                    sprintf(s_buffer, "IP : %s", MonLecteur.IPReader);
+                break;
+                case ReaderCDC:
+                    sprintf(s_buffer, "COM%d", MonLecteur.device);
+                break;
 
-    }
+            }
+            printf("Reader found on %s\n", s_buffer);
 
-    status = Version(&MonLecteur);
-    if (status == MI_OK){
-        printf("Reader firwmare is %s\n", MonLecteur.version);
-        printf("Reader serial is %02X%02X%02X%02X\n", MonLecteur.serial[0], MonLecteur.serial[1], MonLecteur.serial[2], MonLecteur.serial[3]);
-        printf("Reader stack is %s\n", MonLecteur.stack);
-    }
+        }
 
-    status = LEDBuzzer(&MonLecteur, LED_YELLOW_ON);
-    if (status != MI_OK){
-        printf("LED [FAILED]\n");
-        Close();
-    }
+        status = Version(&MonLecteur);
+        if (status == MI_OK){
+            printf("Reader firwmare is %s\n", MonLecteur.version);
+            printf("Reader serial is %02X%02X%02X%02X\n", MonLecteur.serial[0], MonLecteur.serial[1], MonLecteur.serial[2], MonLecteur.serial[3]);
+            printf("Reader stack is %s\n", MonLecteur.stack);
+        }
 
-    key_index = 0;
-    status = Mf_Classic_LoadKey(&MonLecteur, Auth_KeyA, key_a, key_index);
-    if (status != MI_OK){
-        printf("Load Key [FAILED]\n");
-        Close();
-    }
+        status = LEDBuzzer(&MonLecteur, LED_YELLOW_ON);
+        if (status != MI_OK){
+            printf("LED [FAILED]\n");
+            Close();
+        }
 
-    status = Mf_Classic_LoadKey(&MonLecteur, Auth_KeyB, key_b, key_index);
-    if (status != MI_OK){
-        printf("Load Key [FAILED]\n");
-        Close();
-    }
+        key_index = 0;
+        status = Mf_Classic_LoadKey(&MonLecteur, Auth_KeyA, key_a2, key_index);
+        if (status != MI_OK){
+            printf("Load Key [FAILED]\n");
+            Close();
+        }
 
-    // RF field ON
-    RF_Power_Control(&MonLecteur, TRUE, 0);
+        status = Mf_Classic_LoadKey(&MonLecteur, Auth_KeyB, key_b2, key_index);
+        if (status != MI_OK){
+            printf("Load Key [FAILED]\n");
+            Close();
+        }
 
-    status = ISO14443_3_A_PollCard(&MonLecteur, atq, sak, uid, &uid_len);
-    if (status != MI_OK){
-        printf("No available tag in RF field\n");
-        Close();
-    }
+        // RF field ON
+        RF_Power_Control(&MonLecteur, TRUE, 0);
 
-    printf("Tag found: UID=");
-    for (i = 0; i < uid_len; i++)
-        printf("%02X", uid[i]);
-    printf(" ATQ=%02X%02X SAK=%02X\n", atq[1], atq[0], sak[0]);
+        status = ISO14443_3_A_PollCard(&MonLecteur, atq, sak, uid, &uid_len);
+        if (status != MI_OK){
+            printf("No available tag in RF field\n");
+            Close();
+        }
+
+        printf("Tag found: UID=");
+        for (i = 0; i < uid_len; i++)
+            printf("%02X", uid[i]);
+        printf(" ATQ=%02X%02X SAK=%02X\n", atq[1], atq[0], sak[0]);
 
 
-    if ((atq[1] != 0x00) || ((atq[0] != 0x02) && (atq[0] != 0x04) && (atq[0] != 0x18))){
-        printf("This is not a Mifare classic tag\n");
+        if ((atq[1] != 0x00) || ((atq[0] != 0x02) && (atq[0] != 0x04) && (atq[0] != 0x18))){
+            printf("This is not a Mifare classic tag\n");
+            Tag_halt();
+        }
+
+        if ((sak[0] & 0x1F) == 0x08){
+            // Mifare classic 1k : 16 sectors, 3+1 blocks in each sector
+            printf("Tag appears to be a Mifare classic 1k\n");
+            sect_count = 16;
+        } else if ((sak[0] & 0x1F) == 0x18){
+            // Mifare classic 4k : 40 sectors, 3+1 blocks in 32-first sectors, 15+1 blocks in the 8-last sectors
+            printf("Tag appears to be a Mifare classic 4k\n");
+            sect_count = 40;
+        }
+
+
+        //sect_count = 16;
+        //status = card_read(sect_count);
+        LectureBlock2();
+        LectureBlock3();
         Tag_halt();
-    }
-
-    if ((sak[0] & 0x1F) == 0x08){
-        // Mifare classic 1k : 16 sectors, 3+1 blocks in each sector
-        printf("Tag appears to be a Mifare classic 1k\n");
-        sect_count = 16;
-    } else if ((sak[0] & 0x1F) == 0x18){
-        // Mifare classic 4k : 40 sectors, 3+1 blocks in 32-first sectors, 15+1 blocks in the 8-last sectors
-        printf("Tag appears to be a Mifare classic 4k\n");
-        sect_count = 40;
-    }
-
-    //sect_count = 16;
-    status = card_read(sect_count);
-
-    Tag_halt();
 }
 
 void ReaderManager::Done()
@@ -224,18 +226,54 @@ void ReaderManager::setBench(const WINBOOL &value)
     bench = value;
 }
 
-QString ReaderManager::getPrenom(){
-    QString prenom;
+void ReaderManager::LectureBlock2()
+{
+    status = Mf_Classic_LoadKey(&MonLecteur, Auth_KeyA, key_a2, key_index);
+    status = Mf_Classic_Read_Block(&MonLecteur,TRUE,9,data,Auth_KeyA,0);
+
     for (int i = 0; i<15;i++){
-        prenom = prenom + (char)data[16+i];
+        prenom = prenom + (char)data[i];
     }
+
+    status = Mf_Classic_Read_Block(&MonLecteur,TRUE,10,data,Auth_KeyA,0);
+
+    for (int i = 0; i<15;i++){
+        nom = nom + (char)data[i];
+    }
+}
+
+void ReaderManager::LectureBlock3()
+{
+    status = Mf_Classic_LoadKey(&MonLecteur, Auth_KeyA, key_a3, key_index);
+    status = Mf_Classic_Read_Block(&MonLecteur,TRUE,14,data,Auth_KeyA,0);
+
+    unite = data[0]+data[1]+data[2]+data[3];
+}
+
+void ReaderManager::ReadID(){
+    status = Mf_Classic_LoadKey(&MonLecteur, Auth_KeyB, key_b2, key_index);
+    uint8_t prenom[240];
+    for(int i=0;i<16;i++){
+        prenom[i] = newPrenom[i];
+    }
+
+    status = Mf_Classic_Write_Block(&MonLecteur,TRUE,9,prenom,Auth_KeyB,0);
+}
+
+int ReaderManager::getUnite(){
+    return unite;
+}
+
+QString ReaderManager::getPrenom(){
     return prenom;
 }
 
 QString ReaderManager::getNom(){
-    QString nom;
-    for (int i = 0; i<15;i++){
-        nom = nom + (char)data[32+i];
-    }
     return nom;
+}
+
+void ReaderManager::setNewPrenom(char newPrenom[16]){
+    for(int i=0;i<16;i++){
+        this->newPrenom[i] = newPrenom[i];
+    }
 }

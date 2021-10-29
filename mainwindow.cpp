@@ -42,6 +42,11 @@ void MainWindow::on_btnincr_clicked()
 
 void MainWindow::on_btnmaj_clicked()
 {
+
+    char DataIn[16];
+    sprintf(DataIn, ui->prenom->text().toUtf8().data(), 16);
+    reader->setNewPrenom(DataIn);
+    reader->ReadID();
     QMessageBox msgBox;
     msgBox.setText("L'identité a été modifiée.");
     msgBox.exec();
@@ -71,5 +76,5 @@ void MainWindow::on_btnselec_clicked()
     //CONFIGURATION DE BASE
     ui->prenom->setText(reader->getPrenom());
     ui->nom->setText(reader->getNom());
-    ui->nbUnit->setText("50");
+    ui->nbUnit->setText(QString::number(reader->getUnite()));
 }
